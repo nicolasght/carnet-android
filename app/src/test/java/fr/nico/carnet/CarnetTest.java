@@ -104,7 +104,7 @@ public class CarnetTest {
         }
         store=new NoteStore(context);assertEquals(3,store.list("").size());assertEquals("Voyage\n\nListe",store.get(7).body());
         assertEquals("Avant\n\nBrouillon",store.history(7).get(1).body());assertEquals("Corbeille avant\n\nTexte gardé",store.get(9).body());assertEquals("Sans titre",store.get(11).body());
-        assertEquals(200,store.get(7).updated());assertEquals(2,store.getReadableDatabase().getVersion());
+        assertEquals(200,store.get(7).updated());assertEquals(3,store.getReadableDatabase().getVersion());
         try(Cursor c=store.getReadableDatabase().rawQuery("PRAGMA foreign_key_check",null)){assertFalse(c.moveToFirst());}
         assertTrue(store.create("Nouvelle note")>11);store.remove(7);assertTrue(store.history(7).isEmpty());assertNotNull(store.get(9));
     }
@@ -117,8 +117,8 @@ public class CarnetTest {
         long id=store.create("Sur disque");store.close();store=new NoteStore(RuntimeEnvironment.getApplication());assertEquals("Sur disque",store.get(id).body());
     }
     @Test public void typingSavesAutomaticallyAfterPause() throws Exception {
-        long id=store.create("");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
-        ((EditText)activity.findViewById(102)).setText("Sauvegarde automatique");assertEquals("",store.get(id).body());
+        long id=store.create("Avant");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
+        ((EditText)activity.findViewById(102)).setText("Sauvegarde automatique");assertEquals("Avant",store.get(id).body());
         Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(651));
         assertEquals("Sauvegarde automatique",store.get(id).body());assertEquals(2,store.history(id).size());controller.pause().stop().destroy();
     }
@@ -139,7 +139,8 @@ public class CarnetTest {
         EditText body=activity.findViewById(102);assertTrue(body.hasFocus());
         InputMethodManager keyboard=(InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
         assertTrue(Shadows.shadowOf(keyboard).isSoftInputVisible());
-        long id=store.list("").get(0).id();activity.onBackPressed();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertTrue(store.list("").isEmpty());body.setText("Une note à garder");
+        activity.findViewById(R.id.save_note).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();long id=store.list("").get(0).id();
         activity.findViewById(android.R.id.content).findViewWithTag(id).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
         assertFalse("Existing note must not focus the editor",activity.findViewById(102).hasFocus());
         assertFalse("Existing note must not display the keyboard",Shadows.shadowOf(keyboard).isSoftInputVisible());
@@ -163,6 +164,54 @@ public class CarnetTest {
     private View findText(View view,String text) {
         if(view instanceof TextView&&text.contentEquals(((TextView)view).getText()))return view;
         if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),text);if(found!=null)return found;}}return null;
+    }
+    @Test public void okSavesImmediatelyClosesNoteAndHidesKeyboard() {
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        findText(activity.findViewById(android.R.id.content),"+  Nouvelle note").performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        ((EditText)activity.findViewById(102)).setText("Sauvegarde via OK");assertTrue(store.list("").isEmpty());
+        assertNull(findText(activity.findViewById(android.R.id.content),"Historique"));activity.findViewById(R.id.save_note).performClick();
+        assertEquals("Sauvegarde via OK",store.list("").get(0).body());assertNull(activity.findViewById(102));
+        assertFalse(Shadows.shadowOf((InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE)).isSoftInputVisible());
+        controller.pause().stop().destroy();
+    }
+    @Test public void whitespaceDraftNeverCreatesANoteEvenOnPauseAndOk() {
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        findText(activity.findViewById(android.R.id.content),"+  Nouvelle note").performClick();
+        ((EditText)activity.findViewById(102)).setText(" \n\t\u00a0\u200b");Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(700));
+        assertTrue(store.list("").isEmpty());controller.pause();assertTrue(store.list("").isEmpty());controller.resume();
+        activity.findViewById(R.id.save_note).performClick();assertTrue(store.list("").isEmpty());assertNull(activity.findViewById(102));controller.pause().stop().destroy();
+    }
+    @Test public void okSitsAboveKeyboardInsetsOnModernAndroid() throws Exception {
+        long id=store.create("Texte");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
+        View root=((ViewGroup)activity.findViewById(android.R.id.content)).getChildAt(0);
+        android.view.WindowInsets insets=new android.view.WindowInsets.Builder().setInsets(android.view.WindowInsets.Type.systemBars(),android.graphics.Insets.of(0,72,0,72)).setInsets(android.view.WindowInsets.Type.ime(),android.graphics.Insets.of(0,0,0,900)).build();
+        root.dispatchApplyWindowInsets(insets);root.measure(View.MeasureSpec.makeMeasureSpec(1179,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(2400,View.MeasureSpec.EXACTLY));root.layout(0,0,1179,2400);
+        View ok=activity.findViewById(R.id.save_note);assertTrue(root.getPaddingBottom()>=900);assertTrue(ok.getBottom()<=1500);assertTrue(ok.getHeight()>0);controller.pause().stop().destroy();
+    }
+    @Test public void emptyWritesAreRejectedByStorage() {
+        try{store.create(" \n");fail("Empty note saved");}catch(IllegalArgumentException expected){}
+        long id=store.create("À garder");try{store.save(id,"\u00a0");fail("Empty version saved");}catch(IllegalArgumentException expected){}
+        assertEquals("À garder",store.get(id).body());assertEquals(1,store.history(id).size());
+    }
+    @Test public void clearingAnExistingNoteKeepsItUntilOkThenRemovesIt() throws Exception {
+        long id=store.create("Texte à remplacer");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
+        ((EditText)activity.findViewById(102)).setText(" \n");Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(700));
+        assertEquals("Texte à remplacer",store.get(id).body());activity.findViewById(R.id.save_note).performClick();
+        assertNull(store.get(id));assertTrue(store.history(id).isEmpty());controller.pause().stop().destroy();
+    }
+    @Test public void upgradingVersionTwoCleansOnlyUselessEmptyNotes() {
+        store.close();Context context=RuntimeEnvironment.getApplication();
+        try(SQLiteDatabase db=context.openOrCreateDatabase("carnet.db",0,null)) {
+            db.execSQL("CREATE TABLE notes(id INTEGER PRIMARY KEY AUTOINCREMENT,body TEXT NOT NULL,updated INTEGER NOT NULL)");
+            db.execSQL("CREATE TABLE versions(id INTEGER PRIMARY KEY AUTOINCREMENT,note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,body TEXT NOT NULL,saved INTEGER NOT NULL)");
+            db.execSQL("CREATE INDEX versions_note ON versions(note_id,id)");
+            db.execSQL("INSERT INTO notes VALUES(1,'  ',100),(2,'',200)");db.execSQL("INSERT INTO versions VALUES(1,1,'',100),(2,2,'À récupérer',150),(3,2,'',200)");db.setVersion(2);
+        }
+        store=new NoteStore(context);assertNull(store.get(1));assertTrue(store.history(1).isEmpty());assertEquals("À récupérer",store.get(2).body());assertEquals(2,store.history(2).size());
+    }
+    @Test public void importingEmptyNotesSkipsThemButKeepsUsefulHistory() throws Exception {
+        JSONObject backup=new JSONObject("{\"format\":\"carnet\",\"version\":2,\"notes\":[{\"body\":\" \",\"updated\":1,\"versions\":[]},{\"body\":\"\",\"updated\":3,\"versions\":[{\"body\":\"\",\"saved\":3},{\"body\":\"À garder\",\"saved\":2}]}]}");
+        assertEquals(1,store.importBackup(backup));assertEquals("À garder",store.list("").get(0).body());assertEquals(2,store.history(store.list("").get(0).id()).size());
     }
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(qualifiers="fr-w393dp-h851dp-xxhdpi")
     public void renderActualScreensForVisualReview() throws Exception {
