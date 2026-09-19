@@ -6,6 +6,8 @@ Un bloc-notes simple, en français, pour retrouver ses idées et leurs anciennes
 
 **[Télécharger Carnet.apk](https://github.com/nicolasght/carnet-android/releases/latest/download/Carnet.apk)** · [Toutes les versions](https://github.com/nicolasght/carnet-android/releases)
 
+Si le téléchargement reste bloqué, essayez le **[lien de secours direct (version 1.0.0)](https://raw.githubusercontent.com/nicolasght/carnet-android/main/downloads/Carnet.apk)**. Il fournit le même APK signé via un autre serveur de GitHub.
+
 1. Ouvrez ce lien sur votre téléphone Android.
 2. Téléchargez et ouvrez `Carnet.apk`.
 3. Si Android le demande, autorisez l’installation depuis votre navigateur ou votre gestionnaire de fichiers, puis installez Carnet.
