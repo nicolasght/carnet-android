@@ -16,26 +16,29 @@ Android 8.0 ou plus récent. Aucun compte ni connexion Internet nécessaire. Les
 
 <p>
   <img src="docs/notes.png" width="240" alt="Accueil : recherche et contenu des notes" />
-  <img src="docs/editor.png" width="240" alt="Édition directe du texte, liste à cocher et historique" />
+  <img src="docs/editor.png" width="240" alt="Édition directe du texte et historique" />
   <img src="docs/dark.png" width="240" alt="Carnet en mode sombre" />
+  <img src="docs/selection.png" width="240" alt="Contour de sélection après un appui long, avant confirmation de suppression" />
 </p>
 
 Captures du rendu Android produites par les tests. Les exemples ne sont pas ajoutés à l’application installée.
 
 ## Utilisation
 
-- **Nouvelle note** : écrivez directement le texte. Aucun champ de titre.
+- **Nouvelle note** : le curseur et le clavier s’ouvrent automatiquement pour écrire directement. Aucun champ de titre.
+- **Note existante** : elle s’ouvre sans clavier, y compris si elle est vide. Touchez le texte pour commencer à écrire.
 - **Enregistrement automatique** : après 650 ms de pause et lors du passage en arrière-plan.
 - **Recherche** : retrouve un mot dans le contenu. Les notes récemment modifiées apparaissent en premier.
-- **Supprimer** : restez appuyé sur une note, puis touchez **Supprimer**. La note et tout son historique sont effacés définitivement. **Annuler** permet de revenir à la liste sans effacer.
+- **Supprimer** : restez appuyé sur une note. Un contour coloré l’entoure avant l’apparition de la confirmation. Touchez **Supprimer** pour effacer définitivement la note et tout son historique. **Annuler** retire la sélection sans effacer.
 - **Historique** : chaque enregistrement différent devient une version datée. Restaurer une version conserve la version remplacée dans l’historique.
-- **Liste** : placez le curseur sur une ligne et touchez « ☐ Liste » pour ajouter une case ou la cocher/décocher.
 - **Menu d’une note** : partage du texte, duplication et suppression.
 - **Apparence** : thème du téléphone, clair ou sombre.
 
 ## Mise à jour depuis la version 1.0
 
 La version 1.1 retire les titres séparés, les favoris, la corbeille et le sous-titre de l’accueil. Les anciens titres sont intégrés au début du texte, y compris dans chaque version de l’historique. Les anciennes notes de la corbeille redeviennent des notes normales pour éviter toute perte involontaire. Les identifiants et dates sont conservés. L’import d’une ancienne sauvegarde applique la même conversion.
+
+La version 1.2 retire le bouton et le comportement des listes à cocher. Les caractères déjà écrits restent dans le texte. Les notes et historiques sont conservés.
 
 ## Sauvegarder et changer de téléphone
 
@@ -53,6 +56,6 @@ Prérequis : JDK 17, Android SDK 35, Build Tools 35.0.0. Définissez `ANDROID_HO
 ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
 
-Sous Windows : `gradlew.bat`. Les tests couvrent la suppression par appui long avec confirmation et annulation, la migration depuis la version 1.0, l’import des anciennes sauvegardes, l’historique, la persistance, la recherche, l’enregistrement automatique, la recréation de l’écran et Android 8.
+Sous Windows : `gradlew.bat`. Les tests couvrent le clavier à la création et à la réouverture, la conservation du mode écriture après rotation, la sélection avant suppression et son annulation, la migration depuis la version 1.0, l’import des anciennes sauvegardes, l’historique, la persistance, la recherche, l’enregistrement automatique et Android 8.
 
 Pour une distribution signée, définissez `CARNET_KEYSTORE` et `CARNET_STORE_PASSWORD`, avec l’alias de clé `carnet`, puis lancez `./gradlew assembleRelease`. Ne publiez jamais la clé ni son mot de passe. Les APK debug de l’intégration continue servent aux essais et ne remplacent pas une version de distribution signée.

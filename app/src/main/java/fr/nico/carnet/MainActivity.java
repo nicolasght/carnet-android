@@ -15,6 +15,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
 import org.json.JSONObject;
@@ -36,6 +37,7 @@ public class MainActivity extends Activity {
     private EditText body;
     private TextView status;
     private LinearLayout root, cards;
+    private View selectedCard;
     private boolean dark, dirty, loading;
     private int bg, paper, ink, muted, accent, soft;
     private static final int EXPORT = 10, IMPORT = 11;
@@ -52,7 +54,7 @@ public class MainActivity extends Activity {
         store = new NoteStore(this);
         if (state != null) { current = state.getLong("note", -1); query = state.getString("query", ""); }
         if (current >= 0 && store.get(current) != null) {
-            showEditor(current);
+            showEditor(current, state != null && state.getBoolean("editing", false));
             if (state != null && state.containsKey("draftBody")) {
                 body.setText(state.getString("draftBody"));
             }
@@ -74,6 +76,7 @@ public class MainActivity extends Activity {
     }
     private void gap(LinearLayout parent, int height) { View v = new View(this); parent.addView(v, new LinearLayout.LayoutParams(1, dp(height))); }
     private void screen() {
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         root = column(); root.setPadding(dp(20), dp(12), dp(20), dp(12)); root.setBackgroundColor(bg);
         root.setFitsSystemWindows(true);
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -86,9 +89,11 @@ public class MainActivity extends Activity {
     }
     private void hideKeyboard() {
         View focused = getCurrentFocus();
-        if (focused != null) ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(focused.getWindowToken(), 0);
+        View target = focused != null ? focused : getWindow().getDecorView();
+        ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(target.getWindowToken(), 0);
     }
     private void showHome() {
+        clearSelection();
         hideKeyboard(); current = -1; body = null; dirty = false; screen();
         LinearLayout header = row(); header.addView(heading("Carnet", 34), new LinearLayout.LayoutParams(0, -2, 1));
         Button menu = button("⋯", () -> {}); menu.setContentDescription("Options et sauvegardes"); menu.setOnClickListener(v -> homeMenu(menu)); header.addView(menu, new LinearLayout.LayoutParams(dp(52), dp(48))); root.addView(header);
@@ -97,11 +102,12 @@ public class MainActivity extends Activity {
         search.setHint("Rechercher dans les notes"); search.setContentDescription("Rechercher dans les notes"); search.setPadding(dp(16), dp(10), dp(16), dp(10)); search.setBackground(shape(paper, 16)); search.setText(query);
         root.addView(search, new LinearLayout.LayoutParams(-1, dp(52))); gap(root, 12);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); cards=column(); scroll.addView(cards); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        gap(root,12); Button add=button("+  Nouvelle note", () -> guarded(() -> showEditor(store.create("")))); add.setTextColor(dark ? bg : Color.WHITE); add.setTextSize(17); add.setBackground(shape(accent,18)); root.addView(add,new LinearLayout.LayoutParams(-1,dp(56)));
+        gap(root,12); Button add=button("+  Nouvelle note", () -> guarded(() -> showEditor(store.create(""),true))); add.setTextColor(dark ? bg : Color.WHITE); add.setTextSize(17); add.setBackground(shape(accent,18)); root.addView(add,new LinearLayout.LayoutParams(-1,dp(56)));
         search.addTextChangedListener(watcher(() -> { query=search.getText().toString(); refreshCards(); }));
         root.setFocusableInTouchMode(true); root.requestFocus(); refreshCards();
     }
     private void refreshCards() {
+        clearSelection();
         cards.removeAllViews();
         List<NoteStore.Note> notes=store.list(query);
         TextView count=text(notes.size()+ (notes.size()==1 ? " note" : " notes"),12,muted); count.setPadding(dp(3),0,0,dp(10)); cards.addView(count);
@@ -115,12 +121,16 @@ public class MainActivity extends Activity {
             LinearLayout card=column(); card.setPadding(dp(18),dp(16),dp(18),dp(16)); card.setBackground(shape(paper,18));
             TextView preview=text(note.body().isEmpty()?"Note vide":note.body(),18,ink); preview.setMaxLines(6); preview.setEllipsize(android.text.TextUtils.TruncateAt.END); preview.setLineSpacing(dp(3),1); card.addView(preview); gap(card,14);
             card.addView(text(date(note.updated()),12,muted)); card.setClickable(true); card.setFocusable(true); card.setOnClickListener(v->showEditor(note.id()));
-            card.setTag(note.id()); card.setOnLongClickListener(v->{confirmDelete(note.id()); return true;});
+            card.setTag(note.id()); card.setOnLongClickListener(v->{selectForDeletion(card,note.id()); return true;});
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2); p.bottomMargin=dp(10); cards.addView(card,p);
         }
     }
     private String date(long time) { return DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT).format(new Date(time)); }
     private void showEditor(long id) {
+        showEditor(id,false);
+    }
+    private void showEditor(long id, boolean startWriting) {
+        clearSelection(); hideKeyboard();
         handler.removeCallbacks(autosave); current=id; dirty=false; loading=true;
         NoteStore.Note note=store.get(id); if(note==null) { showHome(); return; } screen();
         LinearLayout top=row(); Button back=button("‹", () -> { if(save()) showHome(); }); back.setContentDescription("Revenir aux notes"); top.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
@@ -130,11 +140,17 @@ public class MainActivity extends Activity {
         body=new EditText(this); body.setId(BODY_ID); body.setSaveEnabled(false); body.setGravity(Gravity.TOP); body.setText(note.body()); body.setHint("Écrivez ce qui vous passe par la tête…"); body.setTextSize(18); body.setTextColor(ink); body.setHintTextColor(muted); body.setBackgroundColor(Color.TRANSPARENT); body.setLineSpacing(dp(5),1); body.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES); body.setPadding(dp(4),dp(12),dp(4),dp(12)); sheet.addView(body,new LinearLayout.LayoutParams(-1,0,1));
         root.addView(sheet,new LinearLayout.LayoutParams(-1,0,1)); gap(root,10);
         status=text("Enregistré sur cet appareil",12,muted); root.addView(status); gap(root,8);
-        LinearLayout bottom=row(); Button history=button("Historique",()->{if(save()) showHistory();}); bottom.addView(history,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button secondary=button("☐  Liste",this::toggleChecklist);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(48),1); p.leftMargin=dp(10); bottom.addView(secondary,p); root.addView(bottom);
+        Button history=button("Historique",()->{if(save()) showHistory();}); root.addView(history,new LinearLayout.LayoutParams(-1,dp(48)));
         TextWatcher changes=watcher(()-> { if(!loading) { dirty=true; status.setText("Enregistrement…"); handler.removeCallbacks(autosave); handler.postDelayed(autosave,650); } }); body.addTextChangedListener(changes);
         loading=false; root.setFocusableInTouchMode(true); root.requestFocus();
+        if(startWriting) {
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            EditText editor=body; editor.requestFocus(); editor.setSelection(editor.length());
+            editor.post(()->{
+                if(!isDestroyed()&&!isFinishing()&&body==editor&&editor.hasFocus())
+                    ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).showSoftInput(editor,InputMethodManager.SHOW_IMPLICIT);
+            });
+        }
     }
     private TextWatcher watcher(Runnable action) { return new TextWatcher() { public void beforeTextChanged(CharSequence s,int st,int c,int a) {} public void onTextChanged(CharSequence s,int st,int before,int count) {} public void afterTextChanged(Editable e) { action.run(); } }; }
     private boolean save() {
@@ -145,15 +161,19 @@ public class MainActivity extends Activity {
             status.setText("Enregistré · "+body.length()+" caractères"); return true;
         } catch(Exception e) { status.setText("Échec de sauvegarde. Gardez cette note ouverte."); toast("Enregistrement impossible : vérifiez l’espace disponible."); return false; }
     }
-    private void toggleChecklist() {
-        int pos=Math.max(0,body.getSelectionStart()); String value=body.getText().toString();
-        int start=pos==0?0:value.lastIndexOf('\n',pos-1)+1;
-        String prefix=value.substring(start); int replace=prefix.startsWith("☐ ")||prefix.startsWith("☑ ")?2:0;
-        String next=prefix.startsWith("☐ ")?"☑ ":"☐ ";
-        body.getText().replace(start,start+replace,next); body.requestFocus(); body.setSelection(Math.min(body.length(),pos+next.length()-replace));
+    private void clearSelection() {
+        if(selectedCard!=null) { selectedCard.setSelected(false); selectedCard.setBackground(shape(paper,18)); selectedCard=null; }
+    }
+    private void selectForDeletion(View card,long id) {
+        clearSelection(); selectedCard=card; card.setSelected(true);
+        GradientDrawable outline=shape(soft,18); outline.setStroke(dp(2),accent); card.setBackground(outline);
+        // Leave time for the selected outline to be drawn before the dialog covers the list.
+        card.postDelayed(()->{
+            if(!isDestroyed()&&!isFinishing()&&current<0&&selectedCard==card&&card.isAttachedToWindow()) confirmDelete(id);
+        },180);
     }
     private void confirmDelete(long id) {
-        new AlertDialog.Builder(this).setTitle("Supprimer cette note ?")
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Supprimer cette note ?")
             .setMessage("La note et son historique seront supprimés définitivement.")
             .setNegativeButton("Annuler",null)
             .setPositiveButton("Supprimer",(d,w)->guarded(()->{
@@ -161,7 +181,9 @@ public class MainActivity extends Activity {
                 if(current==id) { handler.removeCallbacks(autosave); dirty=false; showHome(); }
                 else refreshCards();
                 toast("Note supprimée");
-            })).show();
+            })).create();
+        dialog.setOnDismissListener(d->clearSelection());
+        dialog.show();
     }
     private void noteMenu(View anchor) {
         if(!save()) return;
@@ -171,7 +193,7 @@ public class MainActivity extends Activity {
             switch(item.getTitle().toString()) {
                 case "Partager le texte":
                     startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,note.body()),"Partager la note")); break;
-                case "Dupliquer": showEditor(store.create(note.body())); toast("Note dupliquée"); break;
+                case "Dupliquer": showEditor(store.create(note.body()),true); toast("Note dupliquée"); break;
                 case "Supprimer": confirmDelete(note.id()); break;
             }
         });return true;});menu.show();
@@ -192,7 +214,7 @@ public class MainActivity extends Activity {
             case "Exporter une sauvegarde": guarded(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"carnet-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmm",java.util.Locale.ROOT).format(new Date())+".json"),EXPORT)); break;
             case "Importer une sauvegarde": new AlertDialog.Builder(this).setTitle("Importer une sauvegarde").setMessage("Les notes et leur historique seront ajoutés comme nouvelles copies. Vos notes actuelles restent intactes.").setNegativeButton("Annuler",null).setPositiveButton("Choisir un fichier",(d,w)->guarded(()->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT))).show(); break;
             case "Apparence": String[] modes={"system","light","dark"}; String currentMode=getPreferences(0).getString("theme","system"); int selected=java.util.Arrays.asList(modes).indexOf(currentMode); new AlertDialog.Builder(this).setTitle("Apparence").setSingleChoiceItems(new String[]{"Selon le téléphone","Clair","Sombre"},selected,(d,w)->{getPreferences(0).edit().putString("theme",modes[w]).apply(); d.dismiss(); recreate();}).setNegativeButton("Fermer",null).show(); break;
-            default: new AlertDialog.Builder(this).setTitle("Carnet 1.1").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, aucun accès réseau.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
+            default: new AlertDialog.Builder(this).setTitle("Carnet 1.2").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, aucun accès réseau.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
         } return true;}); menu.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {
@@ -220,6 +242,6 @@ public class MainActivity extends Activity {
     private void toast(String message){Toast.makeText(getApplicationContext(),message,Toast.LENGTH_LONG).show();}
     @Override public void onBackPressed(){if(current>=0){if(save())showHome();}else super.onBackPressed();}
     @Override protected void onPause(){save();super.onPause();}
-    @Override protected void onSaveInstanceState(Bundle out){save();out.putLong("note",current);out.putString("query",query);if(current>=0&&body!=null){out.putString("draftBody",body.getText().toString());}super.onSaveInstanceState(out);}
+    @Override protected void onSaveInstanceState(Bundle out){save();out.putLong("note",current);out.putString("query",query);if(current>=0&&body!=null){out.putString("draftBody",body.getText().toString());out.putBoolean("editing",body.hasFocus());}super.onSaveInstanceState(out);}
     @Override protected void onDestroy(){handler.removeCallbacks(autosave);files.shutdown();store.close();super.onDestroy();}
 }

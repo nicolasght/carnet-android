@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import org.json.JSONObject;
@@ -52,10 +53,12 @@ public class CarnetTest {
         long id=store.create("Cette note reste jusqu’à confirmation");store.save(id,"Une deuxième version");
         ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
         View card=activity.findViewById(android.R.id.content).findViewWithTag(id);assertNotNull(card);assertTrue(card.performLongClick());
+        assertTrue(card.isSelected());assertNull(ShadowAlertDialog.getLatestAlertDialog());
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(180));
         AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();assertTrue(dialog.isShowing());
         assertEquals("Supprimer",dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());assertNotNull(store.get(id));
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertNotNull(store.get(id));
-        card.performLongClick();ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();assertNotNull(store.get(id));assertFalse(card.isSelected());
+        card.performLongClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(180));ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
         assertNull(store.get(id));assertTrue(store.history(id).isEmpty());assertNull(activity.findViewById(android.R.id.content).findViewWithTag(id));
         controller.pause().stop().destroy();assertNull(store.get(id));
     }
@@ -64,6 +67,7 @@ public class CarnetTest {
         String home=visibleText(activity.findViewById(android.R.id.content));
         assertFalse(home.contains("Favoris"));assertFalse(home.contains("Corbeille"));assertFalse(home.contains("Une idée, une note."));assertTrue(home.contains("Texte uniquement"));
         edit(activity,id);assertNull(activity.findViewById(101));assertEquals(1,editors(activity.findViewById(android.R.id.content)));
+        assertFalse(visibleText(activity.findViewById(android.R.id.content)).contains("Liste"));
         assertEquals("Texte uniquement",((EditText)activity.findViewById(102)).getText().toString());controller.pause().stop().destroy();
     }
     private String visibleText(View view) {
@@ -128,16 +132,45 @@ public class CarnetTest {
     @Test @Config(sdk=26) public void appLaunchesOnAndroidEight() throws Exception {
         long id=store.create("Android 8");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();edit(controller.get(),id);assertNotNull(controller.get());controller.pause().stop().destroy();
     }
-    @Test public void checklistTogglesAndPersists() throws Exception {
-        long id=store.create("Pain\nLait");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
-        EditText body=activity.findViewById(102);body.setSelection(0);Method toggle=MainActivity.class.getDeclaredMethod("toggleChecklist");toggle.setAccessible(true);toggle.invoke(activity);assertEquals("☐ Pain\nLait",body.getText().toString());toggle.invoke(activity);assertEquals("☑ Pain\nLait",body.getText().toString());controller.pause().stop().destroy();assertEquals("☑ Pain\nLait",store.get(id).body());
+    @Test public void newNoteOpensKeyboardButReopeningEvenAnEmptyNoteDoesNot() {
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        View add=findText(activity.findViewById(android.R.id.content),"+  Nouvelle note");assertNotNull(add);add.performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        EditText body=activity.findViewById(102);assertTrue(body.hasFocus());
+        InputMethodManager keyboard=(InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+        assertTrue(Shadows.shadowOf(keyboard).isSoftInputVisible());
+        long id=store.list("").get(0).id();activity.onBackPressed();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        activity.findViewById(android.R.id.content).findViewWithTag(id).performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertFalse("Existing note must not focus the editor",activity.findViewById(102).hasFocus());
+        assertFalse("Existing note must not display the keyboard",Shadows.shadowOf(keyboard).isSoftInputVisible());
+        controller.pause().stop().destroy();
+    }
+    @Test public void rotatingAnActiveDraftKeepsWritingFocus() {
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        findText(activity.findViewById(android.R.id.content),"+  Nouvelle note").performClick();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        ((EditText)activity.findViewById(102)).setText("Brouillon en cours");Bundle state=new Bundle();controller.pause().saveInstanceState(state).stop().destroy();
+        ActivityController<MainActivity> restored=Robolectric.buildActivity(MainActivity.class).create(state).start().restoreInstanceState(state).resume().visible();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();EditText body=restored.get().findViewById(102);
+        assertEquals("Brouillon en cours",body.getText().toString());assertTrue(body.hasFocus());
+        assertTrue(Shadows.shadowOf((InputMethodManager)restored.get().getSystemService(Context.INPUT_METHOD_SERVICE)).isSoftInputVisible());restored.pause().stop().destroy();
+    }
+    @Test public void leavingSelectedCardCancelsPendingDeleteDialog() {
+        long id=store.create("À garder");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        View card=activity.findViewById(android.R.id.content).findViewWithTag(id);card.performLongClick();assertTrue(card.isSelected());card.performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
+        assertFalse(card.isSelected());assertNull(ShadowAlertDialog.getLatestAlertDialog());assertNotNull(store.get(id));controller.pause().stop().destroy();
+    }
+    private View findText(View view,String text) {
+        if(view instanceof TextView&&text.contentEquals(((TextView)view).getText()))return view;
+        if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),text);if(found!=null)return found;}}return null;
     }
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE) @Config(qualifiers="fr-w393dp-h851dp-xxhdpi")
     public void renderActualScreensForVisualReview() throws Exception {
         store.create("Un coin lecture près de la fenêtre, quelques plantes et de la lumière.");
         store.create("Écouter le prochain album recommandé par les amis.");
-        long id=store.create("Prendre le temps de ralentir.\n\n☑ Réserver le petit gîte\n☐ Préparer le sac\n☐ Choisir une randonnée\n\nNe pas oublier l’appareil photo et un carnet pour les idées en chemin.");
+        long id=store.create("Prendre le temps de ralentir.\n\nRéserver le petit gîte, préparer le sac et choisir une randonnée.\n\nNe pas oublier l’appareil photo et un carnet pour les idées en chemin.");
         ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();capture(activity,"notes");
+        activity.findViewById(android.R.id.content).findViewWithTag(id).performLongClick();capture(activity,"selection");
         edit(activity,id);capture(activity,"editor");controller.pause().stop().destroy();
         RuntimeEnvironment.getApplication().getSharedPreferences("MainActivity",0).edit().putString("theme","dark").commit();
         controller=Robolectric.buildActivity(MainActivity.class).setup();capture(controller.get(),"dark");controller.pause().stop().destroy();
