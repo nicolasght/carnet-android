@@ -108,22 +108,17 @@ public class MainActivity extends Activity {
     private void showHome() {
         clearSelection();
         hideKeyboard(); current = -1; body = null; dirty = false; screen();
-        LinearLayout header = row(); header.addView(heading("Carnet", 34), new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout header = row(); header.addView(heading(query.isEmpty()?"Carnet":"Recherche", 34), new LinearLayout.LayoutParams(0, -2, 1));
         Button menu = button("⋯", () -> {}); menu.setContentDescription("Options et sauvegardes"); menu.setOnClickListener(v -> homeMenu(menu)); header.addView(menu, new LinearLayout.LayoutParams(dp(52), dp(48))); root.addView(header);
-        gap(root, 20);
-        EditText search = new EditText(this); search.setSingleLine(); search.setTextSize(16); search.setTextColor(ink); search.setHintTextColor(muted);
-        search.setHint("Rechercher dans les notes"); search.setContentDescription("Rechercher dans les notes"); search.setPadding(dp(16), dp(10), dp(16), dp(10)); search.setBackground(shape(paper, 16)); search.setText(query);
-        root.addView(search, new LinearLayout.LayoutParams(-1, dp(52))); gap(root, 12);
+        gap(root, 12);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); cards=column(); scroll.addView(cards); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         gap(root,12); Button add=button("+  Nouvelle note", () -> showEditor(-2,true)); add.setTextColor(dark ? bg : Color.WHITE); add.setTextSize(17); add.setBackground(shape(accent,18)); root.addView(add,new LinearLayout.LayoutParams(-1,dp(56)));
-        search.addTextChangedListener(watcher(() -> { query=search.getText().toString(); refreshCards(); }));
         root.setFocusableInTouchMode(true); root.requestFocus(); refreshCards();
     }
     private void refreshCards() {
         clearSelection();
         cards.removeAllViews();
         List<NoteStore.Note> notes=store.list(query);
-        TextView count=text(notes.size()+ (notes.size()==1 ? " note" : " notes"),12,muted); count.setPadding(dp(3),0,0,dp(10)); cards.addView(count);
         if(notes.isEmpty()) {
             LinearLayout empty=column(); empty.setGravity(Gravity.CENTER); empty.setPadding(dp(18),dp(54),dp(18),dp(32));
             TextView symbol=text("✎",48,accent); empty.addView(symbol); gap(empty,16);
@@ -231,14 +226,32 @@ public class MainActivity extends Activity {
             detail.show();
         }).setNegativeButton("Fermer",null).show();
     }
+    private void searchNotes() {
+        EditText search=new EditText(this);search.setSingleLine();search.setText(query);search.setSelectAllOnFocus(true);
+        search.setHint("Rechercher dans les notes");search.setContentDescription("Rechercher dans les notes");
+        search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        LinearLayout container=column();container.setPadding(dp(20),dp(8),dp(20),0);container.addView(search);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Rechercher").setView(container)
+                .setPositiveButton("Rechercher",null).setNegativeButton("Annuler",null).create();
+        Runnable apply=()->{
+            query=search.getText().toString().trim();
+            ((InputMethodManager)getSystemService(INPUT_METHOD_SERVICE)).hideSoftInputFromWindow(search.getWindowToken(),0);
+            dialog.dismiss();showHome();
+        };
+        search.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH){apply.run();return true;}return false;});
+        search.requestFocus();dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->apply.run());
+    }
     private void homeMenu(View anchor) {
-        PopupMenu menu=new PopupMenu(this,anchor);menu.getMenu().add("Mises à jour"); menu.getMenu().add("Exporter une sauvegarde"); menu.getMenu().add("Importer une sauvegarde"); menu.getMenu().add("Apparence"); menu.getMenu().add("À propos");
+        PopupMenu menu=new PopupMenu(this,anchor);menu.getMenu().add("Rechercher");if(!query.isEmpty())menu.getMenu().add("Afficher toutes les notes");menu.getMenu().add("Mises à jour"); menu.getMenu().add("Exporter une sauvegarde"); menu.getMenu().add("Importer une sauvegarde"); menu.getMenu().add("Apparence"); menu.getMenu().add("À propos");
         menu.setOnMenuItemClickListener(item->{switch(item.getTitle().toString()) {
+            case "Rechercher":searchNotes();break;
+            case "Afficher toutes les notes":query="";showHome();break;
             case "Mises à jour":updates.show();break;
             case "Exporter une sauvegarde": guarded(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"carnet-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmm",java.util.Locale.ROOT).format(new Date())+".json"),EXPORT)); break;
             case "Importer une sauvegarde": new AlertDialog.Builder(this).setTitle("Importer une sauvegarde").setMessage("Les notes et leur historique seront ajoutés comme nouvelles copies. Vos notes actuelles restent intactes.").setNegativeButton("Annuler",null).setPositiveButton("Choisir un fichier",(d,w)->guarded(()->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT))).show(); break;
             case "Apparence": String[] modes={"system","light","dark"}; String currentMode=getPreferences(0).getString("theme","system"); int selected=java.util.Arrays.asList(modes).indexOf(currentMode); new AlertDialog.Builder(this).setTitle("Apparence").setSingleChoiceItems(new String[]{"Selon le téléphone","Clair","Sombre"},selected,(d,w)->{getPreferences(0).edit().putString("theme",modes[w]).apply(); d.dismiss(); recreate();}).setNegativeButton("Fermer",null).show(); break;
-            default: new AlertDialog.Builder(this).setTitle("Carnet 1.3").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
+            default: new AlertDialog.Builder(this).setTitle("Carnet 1.4").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
         } return true;}); menu.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {

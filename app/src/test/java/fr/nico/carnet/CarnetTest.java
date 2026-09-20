@@ -161,6 +161,44 @@ public class CarnetTest {
         Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
         assertFalse(card.isSelected());assertNull(ShadowAlertDialog.getLatestAlertDialog());assertNotNull(store.get(id));controller.pause().stop().destroy();
     }
+    @Test public void menuSearchFiltersNotesSurvivesRotationAndCanBeCleared() throws Exception {
+        long match=store.create("Voyage à préparer"),other=store.create("Idées de cuisine");
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();
+        View content=activity.findViewById(android.R.id.content);
+        assertNull(findText(content,"2 notes"));assertNull(findSearchInput(content));
+        selectHomeMenu(activity,"Rechercher");AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
+        EditText search=findSearchInput(dialog.getWindow().getDecorView());assertNotNull(search);search.setText("Voyage");
+        search.onEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        content=activity.findViewById(android.R.id.content);assertNotNull(content.findViewWithTag(match));assertNull(content.findViewWithTag(other));
+        Bundle state=new Bundle();controller.pause().saveInstanceState(state).stop().destroy();
+        controller=Robolectric.buildActivity(MainActivity.class).create(state).start().restoreInstanceState(state).resume().visible();activity=controller.get();
+        assertNull(activity.findViewById(android.R.id.content).findViewWithTag(other));
+        selectHomeMenu(activity,"Rechercher");dialog=ShadowAlertDialog.getLatestAlertDialog();search=findSearchInput(dialog.getWindow().getDecorView());
+        assertEquals("Voyage",search.getText().toString());search.setText("cuisine");dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        assertNotNull(activity.findViewById(android.R.id.content).findViewWithTag(match));
+        selectHomeMenu(activity,"Afficher toutes les notes");content=activity.findViewById(android.R.id.content);
+        assertNotNull(content.findViewWithTag(match));assertNotNull(content.findViewWithTag(other));assertNull(findSearchInput(content));
+        selectHomeMenu(activity,"Rechercher");dialog=ShadowAlertDialog.getLatestAlertDialog();findSearchInput(dialog.getWindow().getDecorView()).setText("introuvable");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();assertNull(activity.findViewById(android.R.id.content).findViewWithTag(match));
+        selectHomeMenu(activity,"Rechercher");dialog=ShadowAlertDialog.getLatestAlertDialog();findSearchInput(dialog.getWindow().getDecorView()).setText("  ");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();assertNotNull(activity.findViewById(android.R.id.content).findViewWithTag(other));
+        controller.pause().stop().destroy();
+    }
+    private void selectHomeMenu(MainActivity activity,String title) {
+        findText(activity.findViewById(android.R.id.content),"⋯").performClick();
+        android.widget.PopupMenu menu=org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        for(int i=0;i<menu.getMenu().size();i++)if(title.contentEquals(menu.getMenu().getItem(i).getTitle())) {
+            Shadows.shadowOf(menu).getOnMenuItemClickListener().onMenuItemClick(menu.getMenu().getItem(i));menu.dismiss();return;
+        }
+        fail("Missing menu action: "+title);
+    }
+    private EditText findSearchInput(View view) {
+        if(view instanceof EditText)return (EditText)view;
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++) {
+            EditText found=findSearchInput(((ViewGroup)view).getChildAt(i));if(found!=null)return found;
+        }
+        return null;
+    }
     private View findText(View view,String text) {
         if(view instanceof TextView&&text.contentEquals(((TextView)view).getText()))return view;
         if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),text);if(found!=null)return found;}}return null;

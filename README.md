@@ -34,7 +34,7 @@ Captures du rendu Android produites par les tests. Les exemples ne sont pas ajou
 - **OK** : le bouton reste au-dessus du clavier, enregistre immédiatement et ferme la note.
 - **Notes vides** : un brouillon vide ou composé seulement d’espaces n’est jamais enregistré. Si vous videz une note existante, sa dernière version reste conservée pendant la frappe ; **OK** ou le retour à l’accueil supprime cette note et son historique.
 - **Enregistrement automatique** : après 650 ms de pause et lors du passage en arrière-plan.
-- **Recherche** : retrouve un mot dans le contenu. Les notes récemment modifiées apparaissent en premier.
+- **Recherche** : ouvrez `⋯ → Rechercher`, saisissez votre texte puis validez. Le menu **Afficher toutes les notes** retire le filtre. Le compteur et la barre de recherche permanente ont été retirés pour laisser plus de place aux notes. Les notes récemment modifiées apparaissent en premier.
 - **Supprimer** : restez appuyé sur une note. Un contour coloré l’entoure avant la confirmation. **Supprimer** efface définitivement la note et son historique. **Annuler** retire la sélection.
 - **Historique** : accessible depuis le menu `⋯` de la note. Chaque enregistrement différent devient une version datée. Restaurer une version conserve la version remplacée dans l’historique.
 - **Menu d’une note** : historique, partage du texte, duplication et suppression.
@@ -47,6 +47,8 @@ La version 1.1 retire les titres séparés, les favoris, la corbeille et le sous
 La version 1.2 retire le bouton et le comportement des listes à cocher. Les caractères déjà écrits restent dans le texte. Les notes et historiques sont conservés.
 
 La version 1.3 remplace le bouton Historique dans la zone d’écriture par **OK**. L’historique reste dans le menu de la note. Les anciennes notes entièrement vides sont nettoyées ; si elles possèdent une version non vide dans leur historique, celle-ci est récupérée. La même règle s’applique à l’import des sauvegardes.
+
+La version 1.4 allège l’accueil : aucun compteur de notes, et recherche accessible depuis le menu `⋯` uniquement.
 
 ## Sauvegarder et changer de téléphone
 
