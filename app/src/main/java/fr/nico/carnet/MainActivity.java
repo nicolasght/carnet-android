@@ -38,7 +38,6 @@ public class MainActivity extends Activity {
     private long current = -1;
     private String query = "";
     private EditText body;
-    private TextView status;
     private LinearLayout root, cards, editorActions;
     private View selectedCard;
     private boolean dark, dirty, loading;
@@ -161,10 +160,9 @@ public class MainActivity extends Activity {
         body=new EditText(this); body.setId(BODY_ID); body.setSaveEnabled(false); body.setGravity(Gravity.TOP); body.setText(note.body()); body.setHint("Écrivez ce qui vous passe par la tête…"); body.setTextSize(18); body.setTextColor(ink); body.setHintTextColor(muted); body.setBackgroundColor(Color.TRANSPARENT); body.setLineSpacing(dp(5),1); body.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES); body.setPadding(dp(4),dp(12),dp(4),dp(12)); sheet.addView(body,new LinearLayout.LayoutParams(-1,0,1));
         root.addView(sheet,new LinearLayout.LayoutParams(-1,0,1));
         editorActions=column();editorActions.setVisibility(View.GONE);root.addView(editorActions);gap(editorActions,10);
-        status=text(id==-2?"":"Enregistré sur cet appareil",12,muted); editorActions.addView(status); gap(editorActions,8);
         Button ok=button("OK",this::finishNote);ok.setId(R.id.save_note);ok.setTextColor(dark?bg:Color.WHITE);ok.setBackground(shape(accent,14));editorActions.addView(ok,new LinearLayout.LayoutParams(-1,dp(48)));
         root.requestApplyInsets();
-        TextWatcher changes=watcher(()-> { if(!loading) { dirty=true; status.setText("Enregistrement…"); handler.removeCallbacks(autosave); handler.postDelayed(autosave,650); } }); body.addTextChangedListener(changes);
+        TextWatcher changes=watcher(()-> { if(!loading) { dirty=true; handler.removeCallbacks(autosave); handler.postDelayed(autosave,650); } }); body.addTextChangedListener(changes);
         loading=false; root.setFocusableInTouchMode(true); root.requestFocus();
         if(startWriting) {
             getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
@@ -180,11 +178,11 @@ public class MainActivity extends Activity {
         handler.removeCallbacks(autosave);
         if(current==-1||body==null||!dirty) return true;
         String content=body.getText().toString();
-        if(NoteStore.isBlank(content)) {status.setText("");return true;}
+        if(NoteStore.isBlank(content)) return true;
         try {
             if(current==-2)current=store.create(content);else store.save(current,content);dirty=false;
-            status.setText("Enregistré · "+body.length()+" caractères"); return true;
-        } catch(Exception e) { status.setText("Échec de sauvegarde. Gardez cette note ouverte."); toast("Enregistrement impossible : vérifiez l’espace disponible."); return false; }
+            return true;
+        } catch(Exception e) { toast("Enregistrement impossible : gardez cette note ouverte et vérifiez l’espace disponible."); return false; }
     }
     private void clearSelection() {
         if(selectedCard!=null) { selectedCard.setSelected(false); selectedCard.setBackground(shape(paper,18)); selectedCard=null; }
@@ -266,7 +264,7 @@ public class MainActivity extends Activity {
             case "Exporter une sauvegarde": guarded(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"carnet-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmm",java.util.Locale.ROOT).format(new Date())+".json"),EXPORT)); break;
             case "Importer une sauvegarde": new AlertDialog.Builder(this).setTitle("Importer une sauvegarde").setMessage("Les notes et leur historique seront ajoutés comme nouvelles copies. Vos notes actuelles restent intactes.").setNegativeButton("Annuler",null).setPositiveButton("Choisir un fichier",(d,w)->guarded(()->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT))).show(); break;
             case "Apparence": String[] modes={"system","light","dark"}; String currentMode=getPreferences(0).getString("theme","system"); int selected=java.util.Arrays.asList(modes).indexOf(currentMode); new AlertDialog.Builder(this).setTitle("Apparence").setSingleChoiceItems(new String[]{"Selon le téléphone","Clair","Sombre"},selected,(d,w)->{getPreferences(0).edit().putString("theme",modes[w]).apply(); d.dismiss(); recreate();}).setNegativeButton("Fermer",null).show(); break;
-            default: new AlertDialog.Builder(this).setTitle("Carnet 1.5").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
+            default: new AlertDialog.Builder(this).setTitle("Carnet 1.5.1").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
         } return true;}); menu.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {

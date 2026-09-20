@@ -223,12 +223,12 @@ public class CarnetTest {
         long id=store.create("Texte");ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
         View root=((ViewGroup)activity.findViewById(android.R.id.content)).getChildAt(0);
         View ok=activity.findViewById(R.id.save_note);View saved=findText(root,"Enregistré sur cet appareil");
-        assertFalse(ok.isShown());assertFalse(saved.isShown());
+        assertFalse(ok.isShown());assertNull(saved);
         android.view.WindowInsets insets=new android.view.WindowInsets.Builder().setInsets(android.view.WindowInsets.Type.systemBars(),android.graphics.Insets.of(0,72,0,72)).setInsets(android.view.WindowInsets.Type.ime(),android.graphics.Insets.of(0,0,0,900)).setVisible(android.view.WindowInsets.Type.ime(),true).build();
         root.dispatchApplyWindowInsets(insets);root.measure(View.MeasureSpec.makeMeasureSpec(1179,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(2400,View.MeasureSpec.EXACTLY));root.layout(0,0,1179,2400);
-        int[] position=new int[2];ok.getLocationOnScreen(position);assertTrue(root.getPaddingBottom()>=900);assertTrue(position[1]+ok.getHeight()<=1500);assertTrue(ok.getHeight()>0);assertTrue(ok.isShown());assertTrue(saved.isShown());
+        int[] position=new int[2];ok.getLocationOnScreen(position);assertTrue(root.getPaddingBottom()>=900);assertTrue(position[1]+ok.getHeight()<=1500);assertTrue(ok.getHeight()>0);assertTrue(ok.isShown());assertNull(saved);assertEquals(2,((ViewGroup)ok.getParent()).getChildCount());
         root.dispatchApplyWindowInsets(new android.view.WindowInsets.Builder(insets).setInsets(android.view.WindowInsets.Type.ime(),android.graphics.Insets.NONE).setVisible(android.view.WindowInsets.Type.ime(),false).build());
-        assertFalse(ok.isShown());assertFalse(saved.isShown());
+        assertFalse(ok.isShown());assertNull(saved);
         root.dispatchApplyWindowInsets(insets);assertTrue(ok.isShown());controller.pause().stop().destroy();
     }
     @Test public void emptyWritesAreRejectedByStorage() {
