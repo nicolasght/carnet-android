@@ -199,6 +199,24 @@ public class CarnetTest {
         }
         return null;
     }
+    @Test public void editorHasNoHeaderAndHistoryRemainsAccessibleFromHome() throws Exception {
+        long id=store.create("Avant");store.save(id,"Après");
+        ActivityController<MainActivity> controller=Robolectric.buildActivity(MainActivity.class).setup();MainActivity activity=controller.get();edit(activity,id);
+        View content=activity.findViewById(android.R.id.content);assertNull(findText(content,"⋯"));assertNull(findText(content,"‹"));
+        ((EditText)activity.findViewById(102)).setText("Version finale");activity.onBackPressed();assertEquals("Version finale",store.get(id).body());
+        activity.findViewById(android.R.id.content).findViewWithTag(id).performLongClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        Shadows.shadowOf(ShadowAlertDialog.getLatestAlertDialog()).clickOnItem(0);
+        Shadows.shadowOf(ShadowAlertDialog.getLatestAlertDialog()).clickOnItem(2);
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals("Avant",store.get(id).body());assertEquals("Avant",((EditText)activity.findViewById(102)).getText().toString());
+        controller.pause().stop().destroy();
+    }
     private View findText(View view,String text) {
         if(view instanceof TextView&&text.contentEquals(((TextView)view).getText()))return view;
         if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++){View found=findText(group.getChildAt(i),text);if(found!=null)return found;}}return null;

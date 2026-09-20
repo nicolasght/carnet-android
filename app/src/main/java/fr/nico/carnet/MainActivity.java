@@ -153,9 +153,6 @@ public class MainActivity extends Activity {
         clearSelection(); hideKeyboard();
         handler.removeCallbacks(autosave); current=id; dirty=false; loading=true;
         NoteStore.Note note=id==-2?new NoteStore.Note(-2,"",0):store.get(id); if(note==null) { showHome(); return; } screen();
-        LinearLayout top=row(); Button back=button("‹",this::finishNote); back.setContentDescription("Revenir aux notes"); top.addView(back,new LinearLayout.LayoutParams(dp(48),dp(48)));
-        TextView caption=text("",12,muted); caption.setPadding(dp(14),0,0,0); top.addView(caption,new LinearLayout.LayoutParams(0,-2,1));
-        Button more=button("⋯",()->{}); more.setContentDescription("Actions sur la note"); more.setOnClickListener(v->noteMenu(more)); top.addView(more,new LinearLayout.LayoutParams(dp(48),dp(48))); root.addView(top); gap(root,12);
         LinearLayout sheet=column(); sheet.setPadding(dp(16),dp(12),dp(16),dp(12)); sheet.setBackground(shape(paper,20));
         body=new EditText(this); body.setId(BODY_ID); body.setSaveEnabled(false); body.setGravity(Gravity.TOP); body.setText(note.body()); body.setHint("Écrivez ce qui vous passe par la tête…"); body.setTextSize(18); body.setTextColor(ink); body.setHintTextColor(muted); body.setBackgroundColor(Color.TRANSPARENT); body.setLineSpacing(dp(5),1); body.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE|android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES); body.setPadding(dp(4),dp(12),dp(4),dp(12)); sheet.addView(body,new LinearLayout.LayoutParams(-1,0,1));
         root.addView(sheet,new LinearLayout.LayoutParams(-1,0,1));
@@ -203,7 +200,8 @@ public class MainActivity extends Activity {
     }
     private void confirmDelete(long id) {
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Supprimer cette note ?")
-            .setMessage("La note et son historique seront supprimés définitivement.")
+                .setMessage("La note et son historique seront supprimés définitivement.")
+                .setNeutralButton("Autres actions",(d,w)->showNoteActions(id))
             .setNegativeButton("Annuler",null)
             .setPositiveButton("Supprimer",(d,w)->guarded(()->{
                 store.remove(id);
@@ -214,28 +212,24 @@ public class MainActivity extends Activity {
         dialog.setOnDismissListener(d->clearSelection());
         dialog.show();
     }
-    private void noteMenu(View anchor) {
-        if(!save()) return;
-        if(current<0)return;
-        NoteStore.Note note=store.get(current); PopupMenu menu=new PopupMenu(this,anchor);
-        menu.getMenu().add("Historique");menu.getMenu().add("Partager le texte"); menu.getMenu().add("Dupliquer"); menu.getMenu().add("Supprimer");
-        menu.setOnMenuItemClickListener(item->{guarded(()->{
-            switch(item.getTitle().toString()) {
-                case "Historique":showHistory();break;
-                case "Partager le texte":
-                    startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,note.body()),"Partager la note")); break;
-                case "Dupliquer": showEditor(store.create(note.body()),true); toast("Note dupliquée"); break;
-                case "Supprimer": confirmDelete(note.id()); break;
+    private void showNoteActions(long id) {
+        NoteStore.Note note=store.get(id);if(note==null)return;
+        String[] actions={"Historique","Partager le texte","Dupliquer"};
+        new AlertDialog.Builder(this).setTitle("Actions sur la note").setItems(actions,(dialog,which)->guarded(()->{
+            switch(which) {
+                case 0:showHistory(id);break;
+                case 1:startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,note.body()),"Partager la note"));break;
+                case 2:showEditor(store.create(note.body()),true);toast("Note dupliquée");break;
             }
-        });return true;});menu.show();
+        })).setNegativeButton("Fermer",null).show();
     }
-    private void showHistory() {
-        List<NoteStore.Version> versions=store.history(current); String[] labels=new String[versions.size()];
+    private void showHistory(long id) {
+        List<NoteStore.Version> versions=store.history(id); String[] labels=new String[versions.size()];
         for(int i=0;i<labels.length;i++) { NoteStore.Version v=versions.get(i); labels[i]=(i==0?"Version actuelle · ":"")+date(v.saved())+" · "+v.body().length()+" caractères"; }
         new AlertDialog.Builder(this).setTitle("Historique · "+labels.length+" versions").setItems(labels,(dialog,which)->{
             NoteStore.Version version=versions.get(which); ScrollView scroll=new ScrollView(this); TextView preview=text(version.body(),17,ink); preview.setTextIsSelectable(true); preview.setPadding(dp(22),dp(18),dp(22),dp(18)); scroll.addView(preview);
             AlertDialog.Builder detail=new AlertDialog.Builder(this).setTitle(date(version.saved())).setView(scroll).setNegativeButton("Fermer",null);
-            if(which!=0&&!NoteStore.isBlank(version.body())) detail.setPositiveButton("Restaurer",(d,w)->new AlertDialog.Builder(this).setTitle("Restaurer cette version ?").setMessage("La version actuelle reste disponible dans l’historique.").setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(a,b)->guarded(()->{store.save(current,version.body());showEditor(current);toast("Version restaurée");})).show());
+            if(which!=0&&!NoteStore.isBlank(version.body())) detail.setPositiveButton("Restaurer",(d,w)->new AlertDialog.Builder(this).setTitle("Restaurer cette version ?").setMessage("La version actuelle reste disponible dans l’historique.").setNegativeButton("Annuler",null).setPositiveButton("Restaurer",(a,b)->guarded(()->{store.save(id,version.body());showEditor(id);toast("Version restaurée");})).show());
             detail.show();
         }).setNegativeButton("Fermer",null).show();
     }
@@ -264,7 +258,7 @@ public class MainActivity extends Activity {
             case "Exporter une sauvegarde": guarded(()->startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"carnet-"+new java.text.SimpleDateFormat("yyyy-MM-dd-HHmm",java.util.Locale.ROOT).format(new Date())+".json"),EXPORT)); break;
             case "Importer une sauvegarde": new AlertDialog.Builder(this).setTitle("Importer une sauvegarde").setMessage("Les notes et leur historique seront ajoutés comme nouvelles copies. Vos notes actuelles restent intactes.").setNegativeButton("Annuler",null).setPositiveButton("Choisir un fichier",(d,w)->guarded(()->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),IMPORT))).show(); break;
             case "Apparence": String[] modes={"system","light","dark"}; String currentMode=getPreferences(0).getString("theme","system"); int selected=java.util.Arrays.asList(modes).indexOf(currentMode); new AlertDialog.Builder(this).setTitle("Apparence").setSingleChoiceItems(new String[]{"Selon le téléphone","Clair","Sombre"},selected,(d,w)->{getPreferences(0).edit().putString("theme",modes[w]).apply(); d.dismiss(); recreate();}).setNegativeButton("Fermer",null).show(); break;
-            default: new AlertDialog.Builder(this).setTitle("Carnet 1.5.1").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
+            default: new AlertDialog.Builder(this).setTitle("Carnet 1.6").setMessage("Votre bloc-notes, tout simplement.\n\n• Sauvegarde après une pause de frappe et à la fermeture.\n• Historique conservé sans limite automatique.\n• Appui long sur une note pour la supprimer définitivement.\n• Aucune publicité, aucun compte, connexion à GitHub uniquement pour les mises à jour.\n\nLes notes restent sur cet appareil. Exportez une sauvegarde régulièrement et avant de désinstaller. Le fichier exporté contient vos notes en clair : gardez-le dans un endroit sûr.").setPositiveButton("Compris",null).show();
         } return true;}); menu.show();
     }
     @Override protected void onActivityResult(int request,int result,Intent data) {

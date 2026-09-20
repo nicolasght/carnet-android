@@ -36,8 +36,8 @@ Captures du rendu Android produites par les tests. Les exemples ne sont pas ajou
 - **Enregistrement automatique** : après 650 ms de pause et lors du passage en arrière-plan.
 - **Recherche** : ouvrez `⋯ → Rechercher`, saisissez votre texte puis validez. Le menu **Afficher toutes les notes** retire le filtre. Le compteur et la barre de recherche permanente ont été retirés pour laisser plus de place aux notes. Les notes récemment modifiées apparaissent en premier.
 - **Supprimer** : restez appuyé sur une note. Un contour coloré l’entoure avant la confirmation. **Supprimer** efface définitivement la note et son historique. **Annuler** retire la sélection.
-- **Historique** : accessible depuis le menu `⋯` de la note. Chaque enregistrement différent devient une version datée. Restaurer une version conserve la version remplacée dans l’historique.
-- **Menu d’une note** : historique, partage du texte, duplication et suppression.
+- **Historique** : appui long sur la note depuis l’accueil, puis **Autres actions → Historique**. Chaque enregistrement différent devient une version datée. Restaurer une version conserve la version remplacée dans l’historique.
+- **Actions sur une note** : appui long pour supprimer, ou **Autres actions** pour l’historique, le partage et la duplication.
 - **Apparence** : thème du téléphone, clair ou sombre.
 
 ## Mises à jour depuis la version 1.0
@@ -55,6 +55,8 @@ La version 1.5 centre le crayon de l’accueil vide et masque le bouton OK ainsi
 La version 1.5.1 retire aussi le message de sauvegarde pendant la saisie : seul OK reste au-dessus du clavier. La sauvegarde automatique reste active.
 
 ## Sauvegarder et changer de téléphone
+
+Depuis la version 1.6, la note ne comporte plus de flèche ni de menu en haut. OK et le retour Android sauvegardent et ferment la note. Les actions restent accessibles par un appui long depuis l’accueil, puis **Autres actions**.
 
 Dans le menu `⋯` de l’accueil, choisissez **Exporter une sauvegarde**. Le fichier JSON inclut les notes et leurs historiques. Sur l’autre téléphone, utilisez **Importer une sauvegarde**. Les notes sont ajoutées comme nouvelles copies ; importer deux fois crée donc des doublons. Une note supprimée est absente des nouvelles sauvegardes, mais reste présente dans les fichiers exportés avant sa suppression.
 
