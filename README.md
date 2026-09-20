@@ -31,7 +31,7 @@ Captures du rendu Android produites par les tests. Les exemples ne sont pas ajou
 
 - **Nouvelle note** : le curseur et le clavier s’ouvrent automatiquement. Aucun champ de titre.
 - **Note existante** : elle s’ouvre sans clavier. Touchez le texte pour écrire.
-- **OK** : le bouton reste au-dessus du clavier, enregistre immédiatement et ferme la note.
+- **OK** : le bouton apparaît au-dessus du clavier, enregistre immédiatement et ferme la note. Quand le clavier est fermé, le bouton et le message de sauvegarde disparaissent pour agrandir la zone de lecture.
 - **Notes vides** : un brouillon vide ou composé seulement d’espaces n’est jamais enregistré. Si vous videz une note existante, sa dernière version reste conservée pendant la frappe ; **OK** ou le retour à l’accueil supprime cette note et son historique.
 - **Enregistrement automatique** : après 650 ms de pause et lors du passage en arrière-plan.
 - **Recherche** : ouvrez `⋯ → Rechercher`, saisissez votre texte puis validez. Le menu **Afficher toutes les notes** retire le filtre. Le compteur et la barre de recherche permanente ont été retirés pour laisser plus de place aux notes. Les notes récemment modifiées apparaissent en premier.
@@ -49,6 +49,8 @@ La version 1.2 retire le bouton et le comportement des listes à cocher. Les car
 La version 1.3 remplace le bouton Historique dans la zone d’écriture par **OK**. L’historique reste dans le menu de la note. Les anciennes notes entièrement vides sont nettoyées ; si elles possèdent une version non vide dans leur historique, celle-ci est récupérée. La même règle s’applique à l’import des sauvegardes.
 
 La version 1.4 allège l’accueil : aucun compteur de notes, et recherche accessible depuis le menu `⋯` uniquement.
+
+La version 1.5 centre le crayon de l’accueil vide et masque le bouton OK ainsi que le message de sauvegarde lorsque le clavier est fermé.
 
 ## Sauvegarder et changer de téléphone
 
